@@ -3,17 +3,16 @@ const axios = require('axios')
 const { Boom } = require('@hapi/boom')
 const qrcode = require('qrcode-terminal')
 const fs = require('fs')
-const mime = require('mime-types') // 👈 usado para detectar o tipo MIME
+const mime = require('mime-types')
 
-const CONFIG_URL = 'https://meudrivenet.x10.bz/botzap1/config.json'
-const WEBHOOK_URL = 'https://meudrivenet.x10.bz/botzap1/webhook.php'
+const CONFIG_URL = 'http://localhost/botzap/config.json'
+const WEBHOOK_URL = 'http://localhost/botzap/webhook.php'
 
 async function loadConfig() {
     try {
         const res = await axios.get(CONFIG_URL)
         return res.data
     } catch (e) {
-        console.error('⚠️ Erro ao carregar config.json via HTTP, usando padrão local')
         return { responder_usuarios: true, grupos_autorizados: [] }
     }
 }
@@ -28,14 +27,16 @@ async function startBot() {
         const { connection, lastDisconnect, qr } = update
 
         if (qr) {
-            console.log("📲 Escaneie o QR abaixo com o WhatsApp:")
+            console.log("📲 Escaneie o QR abaixo:")
             qrcode.generate(qr, { small: true })
+            fs.writeFileSync('status.json', JSON.stringify({ conectado: false, qr }))
         }
 
         if (connection === 'close') {
+            fs.writeFileSync('status.json', JSON.stringify({ conectado: false }))
             const reason = new Boom(lastDisconnect?.error)?.output.statusCode
             if (reason === DisconnectReason.loggedOut) {
-                console.log("❌ Sessão expirada. Escaneie novamente.")
+                console.log("❌ Sessão expirada.")
             } else {
                 console.log("🔁 Reconectando...")
                 startBot()
@@ -43,17 +44,15 @@ async function startBot() {
         }
 
         if (connection === 'open') {
-            console.log("✅ Bot conectado com sucesso!")
+            console.log("✅ Conectado com sucesso!")
+            fs.writeFileSync('status.json', JSON.stringify({ conectado: true }))
+
             const chats = await sock.groupFetchAllParticipating()
             const grupos = {}
-
             for (const jid in chats) {
                 grupos[jid] = chats[jid].subject
             }
-
-            fs.writeFileSync('./grupos.json', JSON.stringify(grupos, null, 2))
-            console.log("📂 Lista de grupos salva em grupos.json")
-            console.log("📌 Atualize config.json com os grupos autorizados que deseja responder")
+            fs.writeFileSync('grupos.json', JSON.stringify(grupos, null, 2))
         }
     })
 
@@ -76,16 +75,11 @@ async function startBot() {
         let nomeContato = sender.split('@')[0]
         try {
             const contato = await sock.onWhatsApp(sender)
-            if (contato && contato[0] && contato[0].notify) {
-                nomeContato = contato[0].notify
-            }
+            if (contato && contato[0]?.notify) nomeContato = contato[0].notify
         } catch {}
 
         try {
-            const res = await axios.post(WEBHOOK_URL, {
-                number: sender,
-                message: text
-            })
+            const res = await axios.post(WEBHOOK_URL, { number: sender, message: text })
 
             if (res.data.reply) {
                 const resposta = res.data.reply.replace(/{nome}/gi, nomeContato)
@@ -95,31 +89,18 @@ async function startBot() {
             if (res.data.file_base64 && res.data.filename) {
                 const buffer = Buffer.from(res.data.file_base64, 'base64')
                 const mimetype = mime.lookup(res.data.filename) || 'application/octet-stream'
-                const ext = mime.extension(mimetype)
 
                 if (mimetype.startsWith('image/')) {
-                    await sock.sendMessage(sender, {
-                        image: buffer,
-                        mimetype,
-                        caption: res.data.caption || '🖼️ Aqui está sua imagem'
-                    })
+                    await sock.sendMessage(sender, { image: buffer, mimetype, caption: res.data.caption || '' })
                 } else if (mimetype.startsWith('video/')) {
-                    await sock.sendMessage(sender, {
-                        video: buffer,
-                        mimetype,
-                        caption: res.data.caption || '📹 Aqui está seu vídeo'
-                    })
+                    await sock.sendMessage(sender, { video: buffer, mimetype, caption: res.data.caption || '' })
                 } else {
-                    await sock.sendMessage(sender, {
-                        document: buffer,
-                        mimetype,
-                        fileName: res.data.filename
-                    })
+                    await sock.sendMessage(sender, { document: buffer, mimetype, fileName: res.data.filename })
                 }
             }
 
         } catch (err) {
-            console.error('❌ Erro no webhook:', err.message)
+            console.error('Erro no webhook:', err.message)
         }
     })
 }
