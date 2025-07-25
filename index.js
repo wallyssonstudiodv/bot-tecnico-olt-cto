@@ -5,8 +5,8 @@ const qrcode = require('qrcode-terminal')
 const fs = require('fs')
 const mime = require('mime-types')
 
-const CONFIG_URL = 'http://localhost/botzap/config.json'
-const WEBHOOK_URL = 'http://localhost/botzap/webhook.php'
+const CONFIG_URL = 'https://meudrivenet.x10.bz/botzap1/config.json'
+const WEBHOOK_URL ='https://meudrivenet.x10.bz/botzap1/webhook.php'
 
 async function loadConfig() {
     try {
