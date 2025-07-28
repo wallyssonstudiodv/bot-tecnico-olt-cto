@@ -1,6 +1,9 @@
 {
-    "oi": {
-        "mensagem": "Olá",
-        "arquivo": ""
+    "menu": "Digite 'foto' para receber uma imagem",
+    "foto": {
+        "reply": "Aqui está a foto que pediu",
+        "file_base64": "iVBORw0KGgoAAAANSUhEUgAAA...",
+        "filename": "imagem.jpg",
+        "caption": "Minha imagem"
     }
 }
